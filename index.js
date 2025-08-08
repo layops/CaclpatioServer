@@ -7,9 +7,15 @@ const rateLimit = require('express-rate-limit');
 const loggerMiddleware = require("./routes/middleware/loggerMiddleware");
 
 const app = express();
+
+// PROXY AYARI - Railway veya başka proxy arkası için zorunlu
+app.set('trust proxy', 1);
+
 const port = process.env.PORT || 5000;
 
-// MongoDB Bağlantı Fonksiyonu
+// ======================================
+// ⚙️ MONGODB BAĞLANTI FONKSİYONU
+// ======================================
 async function connectToDatabase() {
     try {
         console.log('ℹ MongoDB bağlantısı kuruluyor...');
@@ -21,15 +27,31 @@ async function connectToDatabase() {
             socketTimeoutMS: 45000
         });
 
-        console.log('✓ MongoDB bağlantısı başarılı');
+        console.log('✓ MongoDB bağlantısı başarılı (SRV)');
 
-    } catch (error) {
-        console.error('✗ MongoDB bağlantı hatası:', error.message);
-        process.exit(1);
+    } catch (srvError) {
+        console.error('⚠ SRV bağlantısı başarısız, alternatif denenecek...');
+
+        try {
+            await mongoose.connect(process.env.MONGODB_ALT_URI, {
+                retryWrites: true,
+                w: 'majority',
+                serverSelectionTimeoutMS: 10000,
+                socketTimeoutMS: 45000,
+                connectTimeoutMS: 10000
+            });
+            console.log('✓ MongoDB bağlantısı başarılı (Direkt IP)');
+
+        } catch (altError) {
+            console.error('✗ MongoDB bağlantı hatası:', altError.message);
+            process.exit(1);
+        }
     }
 }
 
-// Middleware'ler
+// ======================================
+// 🛡️ MIDDLEWARE'LER
+// ======================================
 app.use(helmet());
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -40,14 +62,17 @@ app.use(cors({
 }));
 app.use(loggerMiddleware);
 
+// Rate Limiter
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
+    windowMs: 15 * 60 * 1000, // 15 dakika
     max: 200,
     message: 'Çok fazla istek gönderdiniz, lütfen 15 dakika sonra tekrar deneyin'
 });
 app.use(limiter);
 
-// Route'lar
+// ======================================
+// 🚪 ROUTE'LAR
+// ======================================
 app.use('/api/user', require('./routes/user.route'));
 
 // Health Check Endpoint
@@ -83,7 +108,9 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Sunucu Başlatma
+// ======================================
+// 🚀 SUNUCU BAŞLATMA
+// ======================================
 async function startServer() {
     try {
         await connectToDatabase();
