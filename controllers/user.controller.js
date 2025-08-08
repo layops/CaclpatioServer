@@ -148,17 +148,16 @@ const mandatoryMaterials = [
     "Duvar Lastiği",
 ];
 
-
 const postLogin = (req, res) => {
     try {
-        const {username, password} = req.body;
+        const { username, password } = req.body;
         if (!username || !password)
-            return res.status(400).json({message: "Please fill all fields."});
+            return res.status(400).json({ message: "Please fill all fields." });
 
-        User.findOne({username: username, password: password})
+        User.findOne({ username: username, password: password })
             .then(exist => {
                 if (!exist)
-                    return res.status(401).json({message: "username or password incorrect"});
+                    return res.status(401).json({ message: "username or password incorrect" });
 
                 //if (bcrypt.compareSync(password, exist.password)) {
                 let token = jwt.sign({
@@ -166,30 +165,30 @@ const postLogin = (req, res) => {
                     username: exist.username,
                     nameSurname: exist.nameSurname
                 }, process.env.JWT_TOKEN);
-                return res.status(200).json({token});
+                return res.status(200).json({ token });
                 /*} else {
                     return res.status(401).json({message: "username or password incorrect"});
                 }*/
             });
     } catch (err) {
         console.log(err);
-        res.status(500).json({message: err.message});
+        res.status(500).json({ message: err.message });
     }
 };
 
 const postRegister = (req, res) => {
     try {
-        const {username, password, nameSurname, secretPassword} = req.body;
+        const { username, password, nameSurname, secretPassword } = req.body;
         if (!username || !password || !nameSurname || !secretPassword)
-            return res.status(404).json({message: "Eksik alanları doldurunuz"});
+            return res.status(404).json({ message: "Eksik alanları doldurunuz" });
 
         if (process.env.SECRET_PASSWORD !== secretPassword)
-            return res.status(500).json({message: "Yetkisiz!"});
+            return res.status(500).json({ message: "Yetkisiz!" });
 
-        User.findOne({username: username})
+        User.findOne({ username: username })
             .then(exist => {
                 if (exist)
-                    return res.status(400).json({message: username + " username already exist"});
+                    return res.status(400).json({ message: username + " username already exist" });
 
                 const user = new User({
                     username: username,
@@ -198,7 +197,7 @@ const postRegister = (req, res) => {
                 });
 
                 mandatoryMaterials.forEach(value => {
-                    user.stock.push({name: value, count: 0});
+                    user.stock.push({ name: value, count: 0 });
                 });
 
                 user.save()
@@ -207,157 +206,160 @@ const postRegister = (req, res) => {
                     })
                     .catch(err => {
                         console.log(err);
-                        res.status(500).json({message: err.message});
+                        res.status(500).json({ message: err.message });
                     });
             });
     } catch (err) {
         console.log(err);
-        res.status(500).json({message: err.message});
+        res.status(500).json({ message: err.message });
     }
 };
 
 const postUpdatePassword = (req, res) => {
     try {
-        const {currentPassword, newPassword} = req.body;
+        const { currentPassword, newPassword } = req.body;
         if (!currentPassword || !newPassword)
-            return res.status(400).json({message: "Please fill all fields."});
+            return res.status(400).json({ message: "Please fill all fields." });
 
-        const userId = mongoose.Types.ObjectId(req.user._id);
+        // 'new' ile ObjectId oluşturuldu
+        const userId = new mongoose.Types.ObjectId(req.user._id);
+
         User.findById(userId, (err, user) => {
             if (err) {
-                res.status(500).json({message: err.message});
-            } else if (!user) {
-                res.status(404).json({message: "User not found"});
-            } else {
-                if (user.password !== currentPassword) {
-                    res.status(400).json({message: "Current password incorrect."})
-                } else {
-                    user.password = newPassword;
-                    user.save().then(() => {
-                        res.status(200).json({message: "Password change successful."});
-                    }).catch(err => {
-                        console.log(err);
-                        res.status(500).json({message: err.message});
-                    });
-                }
+                return res.status(500).json({ message: err.message });
             }
+            if (!user) {
+                return res.status(404).json({ message: "User not found" });
+            }
+            if (user.password !== currentPassword) {
+                return res.status(400).json({ message: "Current password incorrect." });
+            }
+            user.password = newPassword;
+            user.save()
+                .then(() => res.status(200).json({ message: "Password change successful." }))
+                .catch(err => {
+                    console.log(err);
+                    res.status(500).json({ message: err.message });
+                });
         });
     } catch (err) {
         console.log(err);
-        res.status(500).json({message: err.message});
+        res.status(500).json({ message: err.message });
     }
 };
 
-
 const postUpdateStock = (req, res) => {
     try {
-        const userId = mongoose.Types.ObjectId(req.user._id);
+        const userId = new mongoose.Types.ObjectId(req.user._id);
         User.findById(userId, (err, user) => {
             if (err) {
-                res.status(500).json({message: err.message});
-            } else if (!user) {
-                res.status(404).json({message: "User not found"});
-            } else {
-                req.body.forEach(material => {
-                    if (!mandatoryMaterials.includes(material.name)){
-                        return res.status(500).json({message: "Required items cannot be deleted."});
-                    }
-
-                    material.count = normalize(material.count);
-                });
-
-                user.stock = req.body;
-                user.save().then(() => {
-                    res.json(user.stock);
-                }).catch(err => {
-                    console.log(err);
-                    res.status(500).json({message: err.message});
-                });
+                return res.status(500).json({ message: err.message });
             }
+            if (!user) {
+                return res.status(404).json({ message: "User not found" });
+            }
+
+            req.body.forEach(material => {
+                if (!mandatoryMaterials.includes(material.name)) {
+                    return res.status(500).json({ message: "Required items cannot be deleted." });
+                }
+
+                material.count = normalize(material.count);
+            });
+
+            user.stock = req.body;
+            user.save()
+                .then(() => res.json(user.stock))
+                .catch(err => {
+                    console.log(err);
+                    res.status(500).json({ message: err.message });
+                });
         });
 
     } catch (err) {
         console.log(err);
-        res.status(500).json({message: err.message});
+        res.status(500).json({ message: err.message });
     }
-}
+};
 
 const putUpdateStock = (req, res) => {
     try {
-        const userId = mongoose.Types.ObjectId(req.user._id);
+        const userId = new mongoose.Types.ObjectId(req.user._id);
         User.findById(userId, (err, user) => {
             if (err) {
-                res.status(500).json({message: err.message});
-            } else if (!user) {
-                res.status(404).json({message: "User not found"});
-            } else {
-
-                req.body.forEach(material => {
-                    if (material.count < 0){
-                        return res.status(500).json({message: "There are not enough products in stock."});
-                    }
-
-                    const item = user.stock.id(material._id);
-                    item.count = normalize(material.count);
-                });
-
-                user.save().then(() => {
-                    res.json(user.stock);
-                }).catch(err => {
-                    console.log(err);
-                    res.status(500).json({message: err.message});
-                });
+                return res.status(500).json({ message: err.message });
             }
+            if (!user) {
+                return res.status(404).json({ message: "User not found" });
+            }
+
+            req.body.forEach(material => {
+                if (material.count < 0) {
+                    return res.status(500).json({ message: "There are not enough products in stock." });
+                }
+
+                const item = user.stock.id(material._id);
+                if (!item) {
+                    return res.status(400).json({ message: "Material not found in stock." });
+                }
+                item.count = normalize(material.count);
+            });
+
+            user.save()
+                .then(() => res.json(user.stock))
+                .catch(err => {
+                    console.log(err);
+                    res.status(500).json({ message: err.message });
+                });
         });
 
     } catch (err) {
         console.log(err);
-        res.status(500).json({message: err.message});
+        res.status(500).json({ message: err.message });
     }
-}
-
+};
 
 const postAddNewStock = (req, res) => {
     try {
-        const userId = mongoose.Types.ObjectId(req.user._id);
+        const userId = new mongoose.Types.ObjectId(req.user._id);
         User.findById(userId, (err, user) => {
             if (err) {
-                res.status(500).json({message: err.message});
-            } else if (!user) {
-                res.status(404).json({message: "User not found"});
-            } else {
-                user.stock.push(req.body);
-                user.save().then(() => {
-                    res.json(user.stock);
-                }).catch(err => {
-                    console.log(err);
-                    res.status(500).json({message: err.message});
-                });
+                return res.status(500).json({ message: err.message });
             }
+            if (!user) {
+                return res.status(404).json({ message: "User not found" });
+            }
+            user.stock.push(req.body);
+            user.save()
+                .then(() => res.json(user.stock))
+                .catch(err => {
+                    console.log(err);
+                    res.status(500).json({ message: err.message });
+                });
         });
     } catch (err) {
         console.log(err);
-        res.status(500).json({message: err.message});
+        res.status(500).json({ message: err.message });
     }
 };
 
 const getStock = (req, res) => {
     try {
-        const userId = mongoose.Types.ObjectId(req.user._id);
+        const userId = new mongoose.Types.ObjectId(req.user._id);
         User.findById(userId, (err, user) => {
             if (err) {
-                res.status(500).json({message: err.message});
-            } else if (!user) {
-                res.status(404).json({message: "User not found"});
-            } else {
-                res.json(user.stock);
+                return res.status(500).json({ message: err.message });
             }
+            if (!user) {
+                return res.status(404).json({ message: "User not found" });
+            }
+            res.json(user.stock);
         });
     } catch (err) {
         console.log(err);
-        return res.status(404).json({message: err.message});
+        return res.status(404).json({ message: err.message });
     }
-}
+};
 
 module.exports = {
     postLogin,
