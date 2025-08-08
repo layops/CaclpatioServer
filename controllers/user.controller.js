@@ -5,7 +5,6 @@ const mongoose = require('mongoose');
 const normalize = require("../helper/normalize");
 
 const mandatoryMaterials = [
-    // (uzun liste aynen buraya gelecek)
     "Cam-90-193",
     "Cam-90-198",
     "Cam-90-203",
@@ -159,7 +158,7 @@ const postLogin = async (req, res) => {
         if (!exist)
             return res.status(401).json({ message: "username or password incorrect" });
 
-        //if (bcrypt.compareSync(password, exist.password)) {
+        // if (bcrypt.compareSync(password, exist.password)) {
         let token = jwt.sign({
             _id: exist._id,
             username: exist.username,
@@ -213,7 +212,7 @@ const postUpdatePassword = async (req, res) => {
         if (!currentPassword || !newPassword)
             return res.status(400).json({ message: "Please fill all fields." });
 
-        const userId = mongoose.Types.ObjectId(req.user._id);
+        const userId = new mongoose.Types.ObjectId(req.user._id);
         const user = await User.findById(userId);
 
         if (!user) {
@@ -236,19 +235,19 @@ const postUpdatePassword = async (req, res) => {
 
 const postUpdateStock = async (req, res) => {
     try {
-        const userId = mongoose.Types.ObjectId(req.user._id);
+        const userId = new mongoose.Types.ObjectId(req.user._id);
         const user = await User.findById(userId);
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        for (const material of req.body) {
+        req.body.forEach(material => {
             if (!mandatoryMaterials.includes(material.name)) {
                 return res.status(500).json({ message: "Required items cannot be deleted." });
             }
             material.count = normalize(material.count);
-        }
+        });
 
         user.stock = req.body;
         await user.save();
@@ -262,7 +261,7 @@ const postUpdateStock = async (req, res) => {
 
 const putUpdateStock = async (req, res) => {
     try {
-        const userId = mongoose.Types.ObjectId(req.user._id);
+        const userId = new mongoose.Types.ObjectId(req.user._id);
         const user = await User.findById(userId);
 
         if (!user) {
@@ -273,12 +272,10 @@ const putUpdateStock = async (req, res) => {
             if (material.count < 0) {
                 return res.status(500).json({ message: "There are not enough products in stock." });
             }
-
             const item = user.stock.id(material._id);
-            if (!item) {
-                return res.status(404).json({ message: `Material with id ${material._id} not found in stock.` });
+            if (item) {
+                item.count = normalize(material.count);
             }
-            item.count = normalize(material.count);
         }
 
         await user.save();
@@ -292,7 +289,7 @@ const putUpdateStock = async (req, res) => {
 
 const postAddNewStock = async (req, res) => {
     try {
-        const userId = mongoose.Types.ObjectId(req.user._id);
+        const userId = new mongoose.Types.ObjectId(req.user._id);
         const user = await User.findById(userId);
 
         if (!user) {
@@ -311,7 +308,7 @@ const postAddNewStock = async (req, res) => {
 
 const getStock = async (req, res) => {
     try {
-        const userId = mongoose.Types.ObjectId(req.user._id);
+        const userId = new mongoose.Types.ObjectId(req.user._id);
         const user = await User.findById(userId);
 
         if (!user) {
@@ -319,6 +316,7 @@ const getStock = async (req, res) => {
         }
 
         res.json(user.stock);
+
     } catch (err) {
         console.log(err);
         return res.status(404).json({ message: err.message });
