@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const normalize = require("../helper/normalize");
 
 const mandatoryMaterials = [
+    // (uzun liste aynen buraya gelecek)
     "Cam-90-193",
     "Cam-90-198",
     "Cam-90-203",
@@ -148,35 +149,33 @@ const mandatoryMaterials = [
     "Duvar Lastiği",
 ];
 
-const postLogin = (req, res) => {
+const postLogin = async (req, res) => {
     try {
         const { username, password } = req.body;
         if (!username || !password)
             return res.status(400).json({ message: "Please fill all fields." });
 
-        User.findOne({ username: username, password: password })
-            .then(exist => {
-                if (!exist)
-                    return res.status(401).json({ message: "username or password incorrect" });
+        const exist = await User.findOne({ username: username, password: password });
+        if (!exist)
+            return res.status(401).json({ message: "username or password incorrect" });
 
-                //if (bcrypt.compareSync(password, exist.password)) {
-                let token = jwt.sign({
-                    _id: exist._id,
-                    username: exist.username,
-                    nameSurname: exist.nameSurname
-                }, process.env.JWT_TOKEN);
-                return res.status(200).json({ token });
-                /*} else {
-                    return res.status(401).json({message: "username or password incorrect"});
-                }*/
-            });
+        //if (bcrypt.compareSync(password, exist.password)) {
+        let token = jwt.sign({
+            _id: exist._id,
+            username: exist.username,
+            nameSurname: exist.nameSurname
+        }, process.env.JWT_TOKEN);
+        return res.status(200).json({ token });
+        /*} else {
+            return res.status(401).json({message: "username or password incorrect"});
+        }*/
     } catch (err) {
         console.log(err);
         res.status(500).json({ message: err.message });
     }
 };
 
-const postRegister = (req, res) => {
+const postRegister = async (req, res) => {
     try {
         const { username, password, nameSurname, secretPassword } = req.body;
         if (!username || !password || !nameSurname || !secretPassword)
@@ -185,96 +184,49 @@ const postRegister = (req, res) => {
         if (process.env.SECRET_PASSWORD !== secretPassword)
             return res.status(500).json({ message: "Yetkisiz!" });
 
-        User.findOne({ username: username })
-            .then(exist => {
-                if (exist)
-                    return res.status(400).json({ message: username + " username already exist" });
+        const exist = await User.findOne({ username: username });
+        if (exist)
+            return res.status(400).json({ message: username + " username already exist" });
 
-                const user = new User({
-                    username: username,
-                    password: password, //bcrypt.hashSync(password, 8),
-                    nameSurname: nameSurname
-                });
+        const user = new User({
+            username: username,
+            password: password, //bcrypt.hashSync(password, 8),
+            nameSurname: nameSurname
+        });
 
-                mandatoryMaterials.forEach(value => {
-                    user.stock.push({ name: value, count: 0 });
-                });
+        mandatoryMaterials.forEach(value => {
+            user.stock.push({ name: value, count: 0 });
+        });
 
-                user.save()
-                    .then(result => {
-                        res.status(201).json(result);
-                    })
-                    .catch(err => {
-                        console.log(err);
-                        res.status(500).json({ message: err.message });
-                    });
-            });
+        const result = await user.save();
+        res.status(201).json(result);
+
     } catch (err) {
         console.log(err);
         res.status(500).json({ message: err.message });
     }
 };
 
-const postUpdatePassword = (req, res) => {
+const postUpdatePassword = async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
         if (!currentPassword || !newPassword)
             return res.status(400).json({ message: "Please fill all fields." });
 
-        // 'new' ile ObjectId oluşturuldu
-        const userId = new mongoose.Types.ObjectId(req.user._id);
+        const userId = mongoose.Types.ObjectId(req.user._id);
+        const user = await User.findById(userId);
 
-        User.findById(userId, (err, user) => {
-            if (err) {
-                return res.status(500).json({ message: err.message });
-            }
-            if (!user) {
-                return res.status(404).json({ message: "User not found" });
-            }
-            if (user.password !== currentPassword) {
-                return res.status(400).json({ message: "Current password incorrect." });
-            }
-            user.password = newPassword;
-            user.save()
-                .then(() => res.status(200).json({ message: "Password change successful." }))
-                .catch(err => {
-                    console.log(err);
-                    res.status(500).json({ message: err.message });
-                });
-        });
-    } catch (err) {
-        console.log(err);
-        res.status(500).json({ message: err.message });
-    }
-};
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
 
-const postUpdateStock = (req, res) => {
-    try {
-        const userId = new mongoose.Types.ObjectId(req.user._id);
-        User.findById(userId, (err, user) => {
-            if (err) {
-                return res.status(500).json({ message: err.message });
-            }
-            if (!user) {
-                return res.status(404).json({ message: "User not found" });
-            }
+        if (user.password !== currentPassword) {
+            return res.status(400).json({ message: "Current password incorrect." });
+        }
 
-            req.body.forEach(material => {
-                if (!mandatoryMaterials.includes(material.name)) {
-                    return res.status(500).json({ message: "Required items cannot be deleted." });
-                }
-
-                material.count = normalize(material.count);
-            });
-
-            user.stock = req.body;
-            user.save()
-                .then(() => res.json(user.stock))
-                .catch(err => {
-                    console.log(err);
-                    res.status(500).json({ message: err.message });
-                });
-        });
+        user.password = newPassword;
+        await user.save();
+        res.status(200).json({ message: "Password change successful." });
 
     } catch (err) {
         console.log(err);
@@ -282,36 +234,25 @@ const postUpdateStock = (req, res) => {
     }
 };
 
-const putUpdateStock = (req, res) => {
+const postUpdateStock = async (req, res) => {
     try {
-        const userId = new mongoose.Types.ObjectId(req.user._id);
-        User.findById(userId, (err, user) => {
-            if (err) {
-                return res.status(500).json({ message: err.message });
+        const userId = mongoose.Types.ObjectId(req.user._id);
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        for (const material of req.body) {
+            if (!mandatoryMaterials.includes(material.name)) {
+                return res.status(500).json({ message: "Required items cannot be deleted." });
             }
-            if (!user) {
-                return res.status(404).json({ message: "User not found" });
-            }
+            material.count = normalize(material.count);
+        }
 
-            req.body.forEach(material => {
-                if (material.count < 0) {
-                    return res.status(500).json({ message: "There are not enough products in stock." });
-                }
-
-                const item = user.stock.id(material._id);
-                if (!item) {
-                    return res.status(400).json({ message: "Material not found in stock." });
-                }
-                item.count = normalize(material.count);
-            });
-
-            user.save()
-                .then(() => res.json(user.stock))
-                .catch(err => {
-                    console.log(err);
-                    res.status(500).json({ message: err.message });
-                });
-        });
+        user.stock = req.body;
+        await user.save();
+        res.json(user.stock);
 
     } catch (err) {
         console.log(err);
@@ -319,42 +260,65 @@ const putUpdateStock = (req, res) => {
     }
 };
 
-const postAddNewStock = (req, res) => {
+const putUpdateStock = async (req, res) => {
     try {
-        const userId = new mongoose.Types.ObjectId(req.user._id);
-        User.findById(userId, (err, user) => {
-            if (err) {
-                return res.status(500).json({ message: err.message });
+        const userId = mongoose.Types.ObjectId(req.user._id);
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        for (const material of req.body) {
+            if (material.count < 0) {
+                return res.status(500).json({ message: "There are not enough products in stock." });
             }
-            if (!user) {
-                return res.status(404).json({ message: "User not found" });
+
+            const item = user.stock.id(material._id);
+            if (!item) {
+                return res.status(404).json({ message: `Material with id ${material._id} not found in stock.` });
             }
-            user.stock.push(req.body);
-            user.save()
-                .then(() => res.json(user.stock))
-                .catch(err => {
-                    console.log(err);
-                    res.status(500).json({ message: err.message });
-                });
-        });
+            item.count = normalize(material.count);
+        }
+
+        await user.save();
+        res.json(user.stock);
+
     } catch (err) {
         console.log(err);
         res.status(500).json({ message: err.message });
     }
 };
 
-const getStock = (req, res) => {
+const postAddNewStock = async (req, res) => {
     try {
-        const userId = new mongoose.Types.ObjectId(req.user._id);
-        User.findById(userId, (err, user) => {
-            if (err) {
-                return res.status(500).json({ message: err.message });
-            }
-            if (!user) {
-                return res.status(404).json({ message: "User not found" });
-            }
-            res.json(user.stock);
-        });
+        const userId = mongoose.Types.ObjectId(req.user._id);
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        user.stock.push(req.body);
+        await user.save();
+        res.json(user.stock);
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ message: err.message });
+    }
+};
+
+const getStock = async (req, res) => {
+    try {
+        const userId = mongoose.Types.ObjectId(req.user._id);
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        res.json(user.stock);
     } catch (err) {
         console.log(err);
         return res.status(404).json({ message: err.message });
